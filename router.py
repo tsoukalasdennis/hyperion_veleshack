@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 
 class RouteDecision(BaseModel):
-    intent: Literal["rag", "read_file", "out_of_scope"]
+    intent: Literal["rag", "read_file","validate_file", "out_of_scope"]
     path: str | None = None
 
 
@@ -37,6 +37,15 @@ Classify the user's request into exactly one of these intents:
   Even when no exact filename is provided, classify the request
   as read_file and set path to null.
 
+- validate_file:
+  The user wants to validate, check, verify, or inspect whether
+  a file is valid according to the IDE's validation rules.
+
+  For validate_file requests, extract the file name or file path
+  exactly as provided by the user.
+
+  If no specific filename or path is provided, path must be null.
+
 - out_of_scope:
   Requests unrelated to the HYPER-AI project or IDE capabilities.
 
@@ -65,6 +74,18 @@ PATH EXTRACTION RULES:
    -> path = null
 
    User: "Inspect the deployment file"
+   -> path = null
+
+   User: "Validate hello/hello.yaml"
+   -> intent = validate_file
+   -> path = "hello/hello.yaml"
+
+   User: "Is docker-compose.yml valid?"
+   -> intent = validate_file
+   -> path = "docker-compose.yml"
+
+   User: "Can you validate my YAML file?"
+   -> intent = validate_file
    -> path = null
 
 6. For rag requests, path must be null.
