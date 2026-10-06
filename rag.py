@@ -40,20 +40,49 @@ def load_documents() -> list[dict]:
 
 
 def chunk_text(text: str) -> list[str]:
+    paragraphs = [
+        paragraph.strip()
+        for paragraph in text.split("\n")
+        if paragraph.strip()
+    ]
+
     chunks = []
-    start = 0
+    current_chunk = ""
 
-    while start < len(text):
-        end = start + CHUNK_SIZE
-        chunk = text[start:end].strip()
+    for paragraph in paragraphs:
+        # Αν χωράει η νέα παράγραφος στο τρέχον chunk, πρόσθεσέ την.
+        candidate = (
+            paragraph
+            if not current_chunk
+            else f"{current_chunk}\n{paragraph}"
+        )
 
-        if chunk:
-            chunks.append(chunk)
+        if len(candidate) <= CHUNK_SIZE:
+            current_chunk = candidate
+            continue
 
-        start += CHUNK_SIZE - CHUNK_OVERLAP
+        # Το τρέχον chunk είναι γεμάτο.
+        if current_chunk:
+            chunks.append(current_chunk)
+
+        # Αν μια μεμονωμένη παράγραφος είναι μεγαλύτερη
+        # από το όριο, την κόβουμε αναγκαστικά.
+        if len(paragraph) > CHUNK_SIZE:
+            start = 0
+
+            while start < len(paragraph):
+                end = start + CHUNK_SIZE
+                chunks.append(paragraph[start:end].strip())
+                start = end
+
+            current_chunk = ""
+        else:
+            current_chunk = paragraph
+
+    if current_chunk:
+        chunks.append(current_chunk)
 
     return chunks
-
 
 def build_chunks() -> list[dict]:
     chunks = []
