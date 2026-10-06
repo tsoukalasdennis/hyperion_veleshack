@@ -249,6 +249,22 @@ User request:
             yield f"data: {json.dumps({'response': response})}\n\n"
 
 
+    elif decision.intent == "delete_folder":
+        if decision.path is None:
+            response = "Which folder would you like me to delete?"
+            yield f"data: {json.dumps({'response': response})}\n\n"
+
+        else:
+            action = {
+                "action": "delete_folder",
+                "path": decision.path,
+            }
+
+            yield f"data: {json.dumps(action)}\n\n"
+
+            response = f"Deleted folder {decision.path}."
+            yield f"data: {json.dumps({'response': response})}\n\n"
+
     else:
         response = (
             "I can help with HYPER-AI project documentation "
