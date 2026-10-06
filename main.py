@@ -9,6 +9,8 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
 from rag_langchain import RAG
+from router import Router
+
 
 load_dotenv()
 
@@ -16,12 +18,16 @@ API_KEY = os.environ.get("API_KEY", "")
 BASE_URL = "https://legion1.di.uoa.gr/v1"
 MODEL = "llama3.1"
 
+
 llm = ChatOpenAI(
     model=MODEL,
     base_url=BASE_URL,
     api_key=API_KEY,
     max_completion_tokens=2048,
 )
+
+router = Router(llm)
+
 
 app = FastAPI(title="Hyperion Agent")
 
@@ -77,19 +83,38 @@ USER QUESTION:
 
 
 async def generate_reply(request: ChatRequest):
-    results = RAG_INDEX.search(
-        request.text,
-        top_k=3,
-    )
+    decision = await router.route(request.text)
 
-    prompt = build_prompt(
-        request.text,
-        results,
-    )
+    if decision.intent == "rag":
+        results = RAG_INDEX.search(
+            request.text,
+            top_k=3,
+        )
 
-    async for chunk in llm.astream(prompt):
-        if chunk.text:
-            yield f"data: {json.dumps({'response': chunk.text})}\n\n"
+        prompt = build_prompt(
+            request.text,
+            results,
+        )
+
+        async for chunk in llm.astream(prompt):
+            if chunk.text:
+                yield f"data: {json.dumps({'response': chunk.text})}\n\n"
+
+    elif decision.intent == "read_file":
+        response = (
+            "I can read files from the HYPER-AI IDE, "
+            "but file tools are not connected yet."
+        )
+
+        yield f"data: {json.dumps({'response': response})}\n\n"
+
+    else:
+        response = (
+            "I can help with HYPER-AI project documentation "
+            "and IDE tasks."
+        )
+
+        yield f"data: {json.dumps({'response': response})}\n\n"
 
     yield "data: [DONE]\n\n"
 
