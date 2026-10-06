@@ -198,6 +198,24 @@ User request:
             response = f"Created {decision.path}."
             yield f"data: {json.dumps({'response': response})}\n\n"
 
+
+    elif decision.intent == "edit_file":
+        if decision.path is None:
+            response = "Which file would you like me to edit?"
+            yield f"data: {json.dumps({'response': response})}\n\n"
+
+        else:
+            action = {
+                "action": "edit_file",
+                "path": decision.path,
+                "content": decision.content or "",
+            }
+
+            yield f"data: {json.dumps(action)}\n\n"
+
+            response = f"Updated {decision.path}."
+            yield f"data: {json.dumps({'response': response})}\n\n"
+
     else:
         response = (
             "I can help with HYPER-AI project documentation "

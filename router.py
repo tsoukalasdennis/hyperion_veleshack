@@ -5,7 +5,14 @@ from pydantic import BaseModel
 
 
 class RouteDecision(BaseModel):
-    intent: Literal["rag", "read_file","validate_file", "create_file" ,"out_of_scope"]
+    intent: Literal[
+        "rag",
+        "read_file",
+        "validate_file",
+        "create_file",
+        "edit_file",
+        "out_of_scope",
+    ]
     path: str | None = None
     content: str | None = None
 
@@ -42,21 +49,38 @@ Classify the user's request into exactly one of these intents:
   The user wants to validate, check, verify, or inspect whether
   a file is valid according to the IDE's validation rules.
 
-  For validate_file requests, extract the file name or file path
-  exactly as provided by the user.
+  Extract the file name or file path exactly as provided by the user.
 
   If no specific filename or path is provided, path must be null.
 
 - create_file:
-  Use this when the user asks you to create a new file in the IDE workspace.
+  The user wants to create a new file in the IDE workspace.
+
   Extract the file path only if the user explicitly provides it.
-  Extract the requested file content if the user provides or describes content
-  that should be written into the file.
-  If the user asks to create a file without specifying content, set content to an
-  empty string.
+
+  Extract the requested file content if the user provides or describes
+  content that should be written into the new file.
+
+  If the user asks to create a file without specifying content,
+  set content to an empty string.
+
+- edit_file:
+  The user wants to modify, change, update, or rewrite an existing
+  file in the IDE workspace.
+
+  Extract the file path only if the user explicitly provides it.
+
+  Extract the complete new file content if the user provides or
+  describes content that should replace the existing file content.
+
+  Do not invent or infer new file content.
+
+  If the user asks to edit a file but does not provide the new content,
+  set content to an empty string.
 
 - out_of_scope:
   Requests unrelated to the HYPER-AI project or IDE capabilities.
+
 
 PATH EXTRACTION RULES:
 
@@ -67,42 +91,82 @@ PATH EXTRACTION RULES:
 
 3. Never infer, guess, autocomplete, or invent a filename.
 
-4. Words such as "my config file", "the deployment file",
-   "the YAML file", or "the project file" are NOT filenames.
+4. Words or phrases such as "my config file", "the deployment file",
+   "the YAML file", "the project file", "my Python file",
+   "the Python file", or "the file" are NOT filenames.
    In these cases, path must be null.
 
-5. For example:
+5. Examples:
+   "my Python file"
+   "my YAML file"
+   "my config file"
+   "the Python file"
+   "the file"
+   "my project file"
+
+   These descriptions must always result in path = null.
+
+6. Examples:
 
    User: "Show me app.yaml"
+   -> intent = read_file
    -> path = "app.yaml"
 
    User: "Open demo/deployment.yaml"
+   -> intent = read_file
    -> path = "demo/deployment.yaml"
 
    User: "What is inside my config file?"
-   -> path = null
-
-   User: "Inspect the deployment file"
+   -> intent = read_file
    -> path = null
 
    User: "Validate hello/hello.yaml"
    -> intent = validate_file
    -> path = "hello/hello.yaml"
 
-   User: "Is docker-compose.yml valid?"
-   -> intent = validate_file
-   -> path = "docker-compose.yml"
-
    User: "Can you validate my YAML file?"
    -> intent = validate_file
    -> path = null
 
-6. For rag requests, path must be null.
-7. For create_file, never invent file content.
-8. If the user does not specify any content, set content to an empty string.
-9. For out_of_scope requests, path must be null.
+   User: "Create hello.py"
+   -> intent = create_file
+   -> path = "hello.py"
+   -> content = ""
+
+   User: "Create hello.py that prints hello world"
+   -> intent = create_file
+   -> path = "hello.py"
+   -> content = the requested code
+
+   User: "Edit hello.py to print hello world"
+   -> intent = edit_file
+   -> path = "hello.py"
+   -> content = "print('hello world')"
+
+7. For rag requests, path must be null.
+
+8. For out_of_scope requests, path must be null.
+
+9. Never invent file content.
+
+10. If no content is specified for create_file or edit_file,
+   set content to an empty string.
+
+11. The examples above are instructions for classification only.
+    Never copy explanatory text such as "the requested code",
+    "the requested content", or "the file content" into the
+    `content` field.
+
+IMPORTANT:
+- Return exactly one intent.
+- Do not invent paths.
+- Do not invent file content.
+- Preserve explicitly provided paths exactly.
+- Preserve requested code/content accurately.
 
 User request:
 {text}
 """.strip()
+
         return await self.llm.ainvoke(prompt)
+
