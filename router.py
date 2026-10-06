@@ -26,27 +26,52 @@ Classify the user's request into exactly one of these intents:
   or project knowledge.
 
 - read_file:
-  The user wants to read, inspect, show, open, or view a file
-  from the IDE workspace.
+  The user wants to read, inspect, show, open, view, or ask
+  what is inside a file from the IDE workspace.
+
+  This includes requests such as:
+  "What is inside my config file?"
+  "Show me the deployment file"
+  "Can you inspect my YAML file?"
+
+  Even when no exact filename is provided, classify the request
+  as read_file and set path to null.
 
 - out_of_scope:
   Requests unrelated to the HYPER-AI project or IDE capabilities.
 
-For read_file requests, extract the file name or file path exactly
-as provided by the user.
+PATH EXTRACTION RULES:
 
-Important:
-- Do not invent a file path.
-- Do not interpret or replace the filename with something else.
-- If the user asks for "app.yaml", the path must be "app.yaml".
-- If the user asks for "demo/deployment.yaml", the path must be
-  "demo/deployment.yaml".
-- If no specific file is provided, path must be null.
-- For rag requests, path must be null.
-- For out_of_scope requests, path must be null.
+1. Only set `path` when the user explicitly provides a filename
+   or file path in their request.
+
+2. Copy the filename or path exactly as written by the user.
+
+3. Never infer, guess, autocomplete, or invent a filename.
+
+4. Words such as "my config file", "the deployment file",
+   "the YAML file", or "the project file" are NOT filenames.
+   In these cases, path must be null.
+
+5. For example:
+
+   User: "Show me app.yaml"
+   -> path = "app.yaml"
+
+   User: "Open demo/deployment.yaml"
+   -> path = "demo/deployment.yaml"
+
+   User: "What is inside my config file?"
+   -> path = null
+
+   User: "Inspect the deployment file"
+   -> path = null
+
+6. For rag requests, path must be null.
+
+7. For out_of_scope requests, path must be null.
 
 User request:
 {text}
 """.strip()
-
         return await self.llm.ainvoke(prompt)

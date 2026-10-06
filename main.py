@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from rag_langchain import RAG
 from router import Router
-
+from helpers import ReadFileError, read_file
 
 load_dotenv()
 
@@ -101,13 +101,25 @@ async def generate_reply(request: ChatRequest):
                 yield f"data: {json.dumps({'response': chunk.text})}\n\n"
 
     elif decision.intent == "read_file":
-        response = (
-            "I can read files from the HYPER-AI IDE, "
-            "but file tools are not connected yet."
-        )
+        if decision.path is None:
+            response = "Which file would you like me to read?"
+            yield f"data: {json.dumps({'response': response})}\n\n"
 
-        yield f"data: {json.dumps({'response': response})}\n\n"
+        else:
+            try:
+                content = await read_file(decision.path)
 
+                response = (
+                    f"Here is the content of {decision.path}:\n\n"
+                    f"{content}"
+                )
+
+                yield f"data: {json.dumps({'response': response})}\n\n"
+
+            except ReadFileError as exc:
+                response = str(exc)
+
+                yield f"data: {json.dumps({'response': response})}\n\n"
     else:
         response = (
             "I can help with HYPER-AI project documentation "
