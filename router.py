@@ -5,8 +5,9 @@ from pydantic import BaseModel
 
 
 class RouteDecision(BaseModel):
-    intent: Literal["rag", "read_file","validate_file", "out_of_scope"]
+    intent: Literal["rag", "read_file","validate_file", "create_file" ,"out_of_scope"]
     path: str | None = None
+    content: str | None = None
 
 
 class Router:
@@ -45,6 +46,14 @@ Classify the user's request into exactly one of these intents:
   exactly as provided by the user.
 
   If no specific filename or path is provided, path must be null.
+
+- create_file:
+  Use this when the user asks you to create a new file in the IDE workspace.
+  Extract the file path only if the user explicitly provides it.
+  Extract the requested file content if the user provides or describes content
+  that should be written into the file.
+  If the user asks to create a file without specifying content, set content to an
+  empty string.
 
 - out_of_scope:
   Requests unrelated to the HYPER-AI project or IDE capabilities.
@@ -89,8 +98,9 @@ PATH EXTRACTION RULES:
    -> path = null
 
 6. For rag requests, path must be null.
-
-7. For out_of_scope requests, path must be null.
+7. For create_file, never invent file content.
+8. If the user does not specify any content, set content to an empty string.
+9. For out_of_scope requests, path must be null.
 
 User request:
 {text}
