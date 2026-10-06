@@ -11,6 +11,7 @@ class RouteDecision(BaseModel):
         "validate_file",
         "create_file",
         "edit_file",
+        "delete_file",
         "out_of_scope",
     ]
     path: str | None = None
@@ -78,6 +79,16 @@ Classify the user's request into exactly one of these intents:
   If the user asks to edit a file but does not provide the new content,
   set content to an empty string.
 
+- delete_file:
+  The user wants to delete an existing file from the IDE workspace.
+
+  Extract the file path only if the user explicitly provides it.
+
+  Do not infer, guess, autocomplete, or invent the file path.
+
+  If the user asks to delete a file without specifying
+  which file, set path to null.
+
 - out_of_scope:
   Requests unrelated to the HYPER-AI project or IDE capabilities.
 
@@ -97,6 +108,8 @@ PATH EXTRACTION RULES:
    In these cases, path must be null.
 
 5. Examples:
+   "txt file"
+   "the text file"
    "my Python file"
    "my YAML file"
    "my config file"
@@ -156,6 +169,9 @@ PATH EXTRACTION RULES:
     Never copy explanatory text such as "the requested code",
     "the requested content", or "the file content" into the
     `content` field.
+
+12. For delete_file, never invent or infer a path.
+    If no specific filename or path is provided, set path to null.
 
 IMPORTANT:
 - Return exactly one intent.
