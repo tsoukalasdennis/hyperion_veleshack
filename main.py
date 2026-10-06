@@ -109,17 +109,35 @@ async def generate_reply(request: ChatRequest):
             try:
                 content = await read_file(decision.path)
 
-                response = (
-                    f"Here is the content of {decision.path}:\n\n"
-                    f"{content}"
-                )
+                prompt = f"""
+You are Hyperion, an assistant for the HYPER-AI IDE.
 
-                yield f"data: {json.dumps({'response': response})}\n\n"
+The user asked you to inspect a file from the IDE workspace.
+
+File path:
+{decision.path}
+
+File content:
+{content}
+
+Answer the user's original request using the file content.
+
+Be concise and clear.
+Do not invent information that is not present in the file.
+
+User request:
+{request.text}
+""".strip()
+
+                async for chunk in llm.astream(prompt):
+                    if chunk.text:
+                        yield f"data: {json.dumps({'response': chunk.text})}\n\n"
 
             except ReadFileError as exc:
                 response = str(exc)
 
                 yield f"data: {json.dumps({'response': response})}\n\n"
+
     else:
         response = (
             "I can help with HYPER-AI project documentation "
