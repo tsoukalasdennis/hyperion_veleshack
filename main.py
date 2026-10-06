@@ -216,6 +216,39 @@ User request:
             response = f"Updated {decision.path}."
             yield f"data: {json.dumps({'response': response})}\n\n"
 
+    elif decision.intent == "delete_file":
+        if decision.path is None:
+            response = "Which file would you like me to delete?"
+            yield f"data: {json.dumps({'response': response})}\n\n"
+
+        else:
+            action = {
+                "action": "delete_file",
+                "path": decision.path,
+            }
+
+            yield f"data: {json.dumps(action)}\n\n"
+
+            response = f"Deleted {decision.path}."
+            yield f"data: {json.dumps({'response': response})}\n\n"
+
+    elif decision.intent == "create_folder":
+        if decision.path is None:
+            response = "Which folder would you like me to create?"
+            yield f"data: {json.dumps({'response': response})}\n\n"
+
+        else:
+            action = {
+                "action": "create_folder",
+                "path": decision.path,
+            }
+
+            yield f"data: {json.dumps(action)}\n\n"
+
+            response = f"Created folder {decision.path}."
+            yield f"data: {json.dumps({'response': response})}\n\n"
+
+
     else:
         response = (
             "I can help with HYPER-AI project documentation "

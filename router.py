@@ -12,6 +12,7 @@ class RouteDecision(BaseModel):
         "create_file",
         "edit_file",
         "delete_file",
+        "create_folder",
         "out_of_scope",
     ]
     path: str | None = None
@@ -88,6 +89,16 @@ Classify the user's request into exactly one of these intents:
 
   If the user asks to delete a file without specifying
   which file, set path to null.
+
+- create_folder:
+  The user wants to create a new folder in the IDE workspace.
+
+  Extract the folder path only if the user explicitly provides it.
+
+  Do not infer, guess, autocomplete, or invent the folder path.
+
+  If the user asks to create a folder without specifying which folder,
+  set path to null.
 
 - out_of_scope:
   Requests unrelated to the HYPER-AI project or IDE capabilities.
@@ -172,6 +183,9 @@ PATH EXTRACTION RULES:
 
 12. For delete_file, never invent or infer a path.
     If no specific filename or path is provided, set path to null.
+
+13. For create_folder, never invent or infer a path.
+    If no specific folder name or path is provided, set path to null.
 
 IMPORTANT:
 - Return exactly one intent.
