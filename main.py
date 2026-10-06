@@ -10,7 +10,12 @@ from pydantic import BaseModel
 
 from rag_langchain import RAG
 from router import Router
-from helpers import ReadFileError, read_file
+from helpers import (
+    ReadFileError,
+    ValidateFileError,
+    read_file,
+    validate_file,
+)
 
 load_dotenv()
 
@@ -134,6 +139,44 @@ User request:
                         yield f"data: {json.dumps({'response': chunk.text})}\n\n"
 
             except ReadFileError as exc:
+                response = str(exc)
+
+                yield f"data: {json.dumps({'response': response})}\n\n"
+
+    elif decision.intent == "validate_file":
+        if decision.path is None:
+            response = "Which file would you like me to validate?"
+            yield f"data: {json.dumps({'response': response})}\n\n"
+
+        else:
+            try:
+                report = await validate_file(decision.path)
+
+                prompt = f"""
+You are Hyperion, an assistant for the HYPER-AI IDE.
+
+The user asked you to validate a file from the IDE workspace.
+
+File path:
+{decision.path}
+
+Validation report:
+{report}
+
+Explain the validation result to the user clearly.
+
+Be concise and clear.
+Do not invent validation results that are not present in the report.
+
+User request:
+{request.text}
+""".strip()
+
+                async for chunk in llm.astream(prompt):
+                    if chunk.text:
+                        yield f"data: {json.dumps({'response': chunk.text})}\n\n"
+
+            except ValidateFileError as exc:
                 response = str(exc)
 
                 yield f"data: {json.dumps({'response': response})}\n\n"
