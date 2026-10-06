@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
-from rag import build_rag_index, search_docs
+from rag_langchain import RAG
 
 load_dotenv()
 
@@ -39,17 +39,17 @@ class ChatRequest(BaseModel):
 
 
 print("Building RAG index...")
-RAG_INDEX = build_rag_index()
+RAG_INDEX = RAG()
 print("RAG index ready.")
 
 
-def build_prompt(question: str, results: list[dict]) -> str:
+def build_prompt(question: str, results) -> str:
     context_parts = []
 
     for result in results:
         context_parts.append(
-            f"Source: {result['source']}\n"
-            f"{result['text']}"
+            f"Source: {result.metadata['source']}\n"
+            f"{result.page_content}"
         )
 
     context = "\n\n---\n\n".join(context_parts)
@@ -77,9 +77,8 @@ USER QUESTION:
 
 
 async def generate_reply(request: ChatRequest):
-    results = search_docs(
+    results = RAG_INDEX.search(
         request.text,
-        RAG_INDEX,
         top_k=3,
     )
 
