@@ -181,6 +181,23 @@ User request:
 
                 yield f"data: {json.dumps({'response': response})}\n\n"
 
+    elif decision.intent == "create_file":
+        if decision.path is None:
+            response = "Which file would you like me to create?"
+            yield f"data: {json.dumps({'response': response})}\n\n"
+
+        else:
+            action = {
+                "action": "create_file",
+                "path": decision.path,
+                "content": decision.content or "",
+            }
+
+            yield f"data: {json.dumps(action)}\n\n"
+
+            response = f"Created {decision.path}."
+            yield f"data: {json.dumps({'response': response})}\n\n"
+
     else:
         response = (
             "I can help with HYPER-AI project documentation "
