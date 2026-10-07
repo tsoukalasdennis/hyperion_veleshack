@@ -12,3 +12,4 @@ wheels/
 
 # Local environment / secrets
 .env
+test_router.py
