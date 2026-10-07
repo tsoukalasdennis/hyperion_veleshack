@@ -46,13 +46,19 @@ async def generate_file_content(instruction: str) -> str:
     prompt = f"""
 You are Hyperion, an AI coding assistant.
 
-Generate the actual content that should be written into a workspace file.
+Generate the exact content that should be written into a workspace file.
 
 Follow the user's instruction exactly.
 
-Do not explain what you are doing.
-Do not wrap the result in Markdown fences unless the user explicitly
-asks for them.
+IMPORTANT:
+- Return ONLY the file content.
+- Do NOT add introductions or explanations.
+- Do NOT add phrases such as "Here is the content:".
+- Do NOT describe what you generated.
+- Do NOT add conclusions or comments outside the requested content.
+- Do NOT wrap the result in Markdown fences unless the user explicitly asks for them.
+- The response will be written directly into the file, so every character
+  you return becomes part of the file.
 
 User instruction:
 {instruction}
@@ -61,7 +67,6 @@ User instruction:
     response = await llm.ainvoke(prompt)
 
     return response.text.strip()
-
 
 app = FastAPI(title="Hyperion Agent")
 
@@ -334,18 +339,68 @@ User request:
                     decision.path
                 )
 
-                action = {
-                    "action": "edit_file",
-                    "path": resolved_path,
-                    "content": decision.content or "",
-                }
+                content_decision = await router.interpret_content(
+                    user_text=request.text,
+                    intent=decision.intent,
+                    path=resolved_path,
+                )
 
-                yield f"data: {json.dumps(action)}\n\n"
+                if content_decision.mode == "clarify":
+                    response = (
+                        content_decision.clarification
+                        or "Could you clarify what content the file should contain?"
+                    )
+                    assistant_response = response
 
-                response = f"Updated {resolved_path}."
-                assistant_response = response
+                    yield f"data: {json.dumps({'response': response})}\n\n"
 
-                yield f"data: {json.dumps({'response': response})}\n\n"
+                elif content_decision.mode == "empty":
+                    action = {
+                        "action": "edit_file",
+                        "path": resolved_path,
+                        "content": "",
+                    }
+
+                    yield f"data: {json.dumps(action)}\n\n"
+
+                    response = f"Updated {resolved_path}."
+                    assistant_response = response
+
+                    yield f"data: {json.dumps({'response': response})}\n\n"
+
+                elif content_decision.mode == "literal":
+                    content = content_decision.literal_content or ""
+
+                    action = {
+                        "action": "edit_file",
+                        "path": resolved_path,
+                        "content": content,
+                    }
+
+                    yield f"data: {json.dumps(action)}\n\n"
+
+                    response = f"Updated {resolved_path}."
+                    assistant_response = response
+
+                    yield f"data: {json.dumps({'response': response})}\n\n"
+
+                elif content_decision.mode == "generate":
+                    content = await generate_file_content(
+                        content_decision.generation_instruction or ""
+                    )
+
+                    action = {
+                        "action": "edit_file",
+                        "path": resolved_path,
+                        "content": content,
+                    }
+
+                    yield f"data: {json.dumps(action)}\n\n"
+
+                    response = f"Updated {resolved_path}."
+                    assistant_response = response
+
+                    yield f"data: {json.dumps({'response': response})}\n\n"
 
             except ResolvePathError as exc:
                 response = str(exc)
