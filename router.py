@@ -48,11 +48,42 @@ class Router:
         self.llm = llm.with_structured_output(RouteDecision)
         self.content_llm = llm.with_structured_output(ContentDecision)
 
-    async def route(self, text: str) -> RouteDecision:
+    async def route(
+        self,
+        text: str,
+        conversation_history: str = "",
+    ) -> RouteDecision:
+        if conversation_history:
+            history_section = conversation_history
+        else:
+            history_section = "(No previous conversation.)"
+
         prompt = f"""
 You are the routing component of Hyperion, an assistant for the HYPER-AI IDE.
 
 Classify the user's request into exactly one intent.
+
+You have access to the previous conversation for this session.
+
+Use the previous conversation to resolve references such as:
+- "it"
+- "that file"
+- "that folder"
+- "the file we just created"
+- "the one from before"
+- "open it"
+- "edit it"
+- "delete it"
+
+When the current request refers to something from the previous conversation,
+use the previous conversation to identify the relevant file or folder path.
+
+The current user request is the source of truth for the new action.
+Do not invent a path when the previous conversation does not provide enough
+information to resolve the reference safely.
+
+If a reference cannot be resolved from the conversation, set path to null
+and use needs_clarification when appropriate.
 
 Intents:
 
@@ -93,11 +124,26 @@ the user and preserve it exactly.
 
 A candidate path may be a filename without an extension.
 
+If the user refers to a file indirectly, use the previous conversation
+to resolve the referenced path.
+
+For example:
+
+Previous conversation:
+USER: Create config.py
+ASSISTANT: Created config.py.
+
+Current request:
+Read it
+
+The correct path is:
+config.py
+
 Do not check whether the path exists.
 Workspace path resolution is handled separately by the application.
 
-If the user refers only to a generic file description and does not
-provide a candidate filename or path, set path to null.
+If the user refers only to a generic file description and the path cannot
+be resolved from the current request or previous conversation, set path to null.
 
 For folder operations, apply the same rule to the folder path.
 
@@ -130,12 +176,19 @@ Do not use workspace existence as a routing criterion.
 Do not use the presence or absence of file content to decide
 whether a request is a file operation.
 
+Use conversation history only to resolve references and maintain context.
+
 Return exactly one intent.
 Do not invent paths.
 Do not invent content.
 Preserve user-provided paths and content accurately.
 
-User request:
+PREVIOUS CONVERSATION:
+
+{history_section}
+
+CURRENT USER REQUEST:
+
 {text}
 """.strip()
 
