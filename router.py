@@ -4,6 +4,7 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
 
+
 class RouteDecision(BaseModel):
     intent: Literal[
         "rag",
@@ -16,8 +17,33 @@ class RouteDecision(BaseModel):
         "delete_folder",
         "out_of_scope",
     ]
+
     path: str | None = None
+
     content: str | None = None
+
+    content_request: str | None = None
+
+    needs_clarification: bool = False
+
+    clarification: str | None = None
+
+
+
+class ContentDecision(BaseModel):
+    mode: Literal[
+        "literal",
+        "generate",
+        "clarify",
+    ]
+
+    literal_content: str | None = None
+    generation_instruction: str | None = None
+    clarification: str | None = None
+
+
+
+
 
 
 class Router:
@@ -25,6 +51,7 @@ class Router:
 
     def __init__(self, llm: ChatOpenAI):
         self.llm = llm.with_structured_output(RouteDecision)
+        self.content_llm = llm.with_structured_output(ContentDecision)
 
     async def route(self, text: str) -> RouteDecision:
         prompt = f"""
@@ -116,3 +143,55 @@ User request:
 
         return await self.llm.ainvoke(prompt)
 
+    async def interpret_content(
+        self,
+        user_text: str,
+        intent: str,
+        path: str | None,
+    ) -> ContentDecision:
+        prompt = f"""
+    You are the content interpretation component of an AI coding assistant.
+
+    Determine what the user means about the content of a workspace file.
+
+    You must choose exactly one mode:
+
+    literal
+    The user provided the exact content that should be written to the file.
+    Return that content exactly in literal_content.
+    Do not rewrite it, explain it, or generate anything.
+
+    generate
+    The user described what the file should contain and expects the assistant
+    to generate the content.
+    Return the user's requested content description in generation_instruction.
+    Do not generate the final file content.
+
+    clarify
+    You cannot safely determine whether the user supplied exact content or
+    requested generated content.
+    Return a short question in clarification.
+
+    Important rules:
+
+    - Never guess between literal and generate when the meaning is genuinely unclear.
+    - Never generate file content yourself.
+    - Preserve literal content exactly.
+    - Do not put the same information into multiple fields.
+    - For literal, only literal_content may be populated.
+    - For generate, only generation_instruction may be populated.
+    - For clarify, only clarification may be populated.
+    - The file path is metadata, not file content.
+    - The original user request is the source of truth.
+
+    Intent:
+    {intent}
+
+    Target path:
+    {path}
+
+    Original user request:
+    {user_text}
+    """.strip()
+
+        return await self.content_llm.ainvoke(prompt)

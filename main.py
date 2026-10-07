@@ -19,7 +19,9 @@ from helpers import (
     ResolvePathError,
 )
 
+
 load_dotenv()
+
 
 API_KEY = os.environ.get("API_KEY", "")
 BASE_URL = "https://legion1.di.uoa.gr/v1"
@@ -33,7 +35,29 @@ llm = ChatOpenAI(
     max_completion_tokens=2048,
 )
 
+
 router = Router(llm)
+
+
+async def generate_file_content(instruction: str) -> str:
+    prompt = f"""
+You are Hyperion, an AI coding assistant.
+
+Generate the actual content that should be written into a workspace file.
+
+Follow the user's instruction exactly.
+
+Do not explain what you are doing.
+Do not wrap the result in Markdown fences unless the user explicitly
+asks for them.
+
+User instruction:
+{instruction}
+""".strip()
+
+    response = await llm.ainvoke(prompt)
+
+    return response.text.strip()
 
 
 app = FastAPI(title="Hyperion Agent")
@@ -187,16 +211,48 @@ User request:
             yield f"data: {json.dumps({'response': response})}\n\n"
 
         else:
-            action = {
-                "action": "create_file",
-                "path": decision.path,
-                "content": decision.content or "",
-            }
+            content_decision = await router.interpret_content(
+                user_text=request.text,
+                intent=decision.intent,
+                path=decision.path,
+            )
 
-            yield f"data: {json.dumps(action)}\n\n"
+            if content_decision.mode == "clarify":
+                response = content_decision.clarification
 
-            response = f"Created {decision.path}."
-            yield f"data: {json.dumps({'response': response})}\n\n"
+                yield f"data: {json.dumps({'response': response})}\n\n"
+
+            elif content_decision.mode == "literal":
+                content = content_decision.literal_content or ""
+
+                action = {
+                    "action": "create_file",
+                    "path": decision.path,
+                    "content": content,
+                }
+
+                yield f"data: {json.dumps(action)}\n\n"
+
+                response = f"Created {decision.path}."
+
+                yield f"data: {json.dumps({'response': response})}\n\n"
+
+            elif content_decision.mode == "generate":
+                content = await generate_file_content(
+                    content_decision.generation_instruction or ""
+                )
+
+                action = {
+                    "action": "create_file",
+                    "path": decision.path,
+                    "content": content,
+                }
+
+                yield f"data: {json.dumps(action)}\n\n"
+
+                response = f"Created {decision.path}."
+
+                yield f"data: {json.dumps({'response': response})}\n\n"
 
     elif decision.intent == "edit_file":
         if decision.path is None:
@@ -218,6 +274,7 @@ User request:
                 yield f"data: {json.dumps(action)}\n\n"
 
                 response = f"Updated {resolved_path}."
+
                 yield f"data: {json.dumps({'response': response})}\n\n"
 
             except ResolvePathError as exc:
@@ -244,6 +301,7 @@ User request:
                 yield f"data: {json.dumps(action)}\n\n"
 
                 response = f"Deleted {resolved_path}."
+
                 yield f"data: {json.dumps({'response': response})}\n\n"
 
             except ResolvePathError as exc:
@@ -265,14 +323,24 @@ User request:
             yield f"data: {json.dumps(action)}\n\n"
 
             response = f"Created folder {decision.path}."
+
             yield f"data: {json.dumps({'response': response})}\n\n"
 
     elif decision.intent == "delete_folder":
         if decision.path is None:
             response = "Which folder would you like me to delete?"
+            yield f"data: {json.dumps({'response': response})}\n\n"
+
+        else:
+            action = {
+                "action": "delete_folder",
+                "path": decision.path,
+            }
+
             yield f"data: {json.dumps(action)}\n\n"
 
             response = f"Deleted folder {decision.path}."
+
             yield f"data: {json.dumps({'response': response})}\n\n"
 
     else:
