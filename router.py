@@ -4,7 +4,6 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
 
-
 class RouteDecision(BaseModel):
     intent: Literal[
         "rag",
@@ -29,9 +28,9 @@ class RouteDecision(BaseModel):
     clarification: str | None = None
 
 
-
 class ContentDecision(BaseModel):
     mode: Literal[
+        "empty",
         "literal",
         "generate",
         "clarify",
@@ -40,10 +39,6 @@ class ContentDecision(BaseModel):
     literal_content: str | None = None
     generation_instruction: str | None = None
     clarification: str | None = None
-
-
-
-
 
 
 class Router:
@@ -132,6 +127,9 @@ a file operation as out_of_scope because the target may not exist.
 
 Do not use workspace existence as a routing criterion.
 
+Do not use the presence or absence of file content to decide
+whether a request is a file operation.
+
 Return exactly one intent.
 Do not invent paths.
 Do not invent content.
@@ -150,48 +148,60 @@ User request:
         path: str | None,
     ) -> ContentDecision:
         prompt = f"""
-    You are the content interpretation component of an AI coding assistant.
+You are the content interpretation component of an AI coding assistant.
 
-    Determine what the user means about the content of a workspace file.
+Determine what the user means about the content of a workspace file.
 
-    You must choose exactly one mode:
+You must choose exactly one mode:
 
-    literal
-    The user provided the exact content that should be written to the file.
-    Return that content exactly in literal_content.
-    Do not rewrite it, explain it, or generate anything.
+empty
+The user wants the file to contain no content.
 
-    generate
-    The user described what the file should contain and expects the assistant
-    to generate the content.
-    Return the user's requested content description in generation_instruction.
-    Do not generate the final file content.
+Choose empty when:
+- the user asks to create a file without specifying any content;
+- the user explicitly says the file should be empty;
+- the user says the file should contain no content.
 
-    clarify
-    You cannot safely determine whether the user supplied exact content or
-    requested generated content.
-    Return a short question in clarification.
+Do not choose clarify merely because no content was provided.
 
-    Important rules:
+literal
+The user provided the exact content that should be written to the file.
+Return that content exactly in literal_content.
+Do not rewrite it, explain it, or generate anything.
 
-    - Never guess between literal and generate when the meaning is genuinely unclear.
-    - Never generate file content yourself.
-    - Preserve literal content exactly.
-    - Do not put the same information into multiple fields.
-    - For literal, only literal_content may be populated.
-    - For generate, only generation_instruction may be populated.
-    - For clarify, only clarification may be populated.
-    - The file path is metadata, not file content.
-    - The original user request is the source of truth.
+generate
+The user described what the file should contain and expects the assistant
+to generate the content.
+Return the user's requested content description in generation_instruction.
+Do not generate the final file content.
 
-    Intent:
-    {intent}
+clarify
+You cannot safely determine whether the user supplied exact content
+or requested generated content, and the request is genuinely ambiguous.
 
-    Target path:
-    {path}
+Important rules:
 
-    Original user request:
-    {user_text}
-    """.strip()
+- Prefer empty when the user requests a file but provides no content.
+- Treat explicit requests for an empty file as empty.
+- Never guess between literal and generate when the meaning is genuinely unclear.
+- Never generate file content yourself.
+- Preserve literal content exactly.
+- Do not put the same information into multiple fields.
+- For empty, all content fields must be null.
+- For literal, only literal_content may be populated.
+- For generate, only generation_instruction may be populated.
+- For clarify, only clarification may be populated.
+- The file path is metadata, not file content.
+- The original user request is the source of truth.
+
+Intent:
+{intent}
+
+Target path:
+{path}
+
+Original user request:
+{user_text}
+""".strip()
 
         return await self.content_llm.ainvoke(prompt)

@@ -205,6 +205,7 @@ User request:
 
                 yield f"data: {json.dumps({'response': response})}\n\n"
 
+    
     elif decision.intent == "create_file":
         if decision.path is None:
             response = "Which file would you like me to create?"
@@ -219,6 +220,19 @@ User request:
 
             if content_decision.mode == "clarify":
                 response = content_decision.clarification
+
+                yield f"data: {json.dumps({'response': response})}\n\n"
+
+            elif content_decision.mode == "empty":
+                action = {
+                    "action": "create_file",
+                    "path": decision.path,
+                    "content": "",
+                }
+
+                yield f"data: {json.dumps(action)}\n\n"
+
+                response = f"Created {decision.path}."
 
                 yield f"data: {json.dumps({'response': response})}\n\n"
 
@@ -253,6 +267,8 @@ User request:
                 response = f"Created {decision.path}."
 
                 yield f"data: {json.dumps({'response': response})}\n\n"
+
+
 
     elif decision.intent == "edit_file":
         if decision.path is None:
