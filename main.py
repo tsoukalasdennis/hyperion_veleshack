@@ -15,6 +15,8 @@ from helpers import (
     ValidateFileError,
     read_file,
     validate_file,
+    resolve_existing_path,
+    ResolvePathError,
 )
 
 load_dotenv()
@@ -112,33 +114,25 @@ async def generate_reply(request: ChatRequest):
 
         else:
             try:
-                content = await read_file(decision.path)
+                resolved_path = await resolve_existing_path(
+                    decision.path
+                )
 
-                prompt = f"""
-You are Hyperion, an assistant for the HYPER-AI IDE.
+                content = await read_file(
+                    resolved_path
+                )
 
-The user asked you to inspect a file from the IDE workspace.
+                if not content.strip():
+                    response = f"The file `{resolved_path}` is empty."
+                else:
+                    response = (
+                        f"The file `{resolved_path}` contains:\n\n"
+                        f"```text\n{content}\n```"
+                    )
 
-File path:
-{decision.path}
+                yield f"data: {json.dumps({'response': response})}\n\n"
 
-File content:
-{content}
-
-Answer the user's original request using the file content.
-
-Be concise and clear.
-Do not invent information that is not present in the file.
-
-User request:
-{request.text}
-""".strip()
-
-                async for chunk in llm.astream(prompt):
-                    if chunk.text:
-                        yield f"data: {json.dumps({'response': chunk.text})}\n\n"
-
-            except ReadFileError as exc:
+            except (ResolvePathError, ReadFileError) as exc:
                 response = str(exc)
 
                 yield f"data: {json.dumps({'response': response})}\n\n"
@@ -150,7 +144,13 @@ User request:
 
         else:
             try:
-                report = await validate_file(decision.path)
+                resolved_path = await resolve_existing_path(
+                    decision.path
+                )
+
+                report = await validate_file(
+                    resolved_path
+                )
 
                 prompt = f"""
 You are Hyperion, an assistant for the HYPER-AI IDE.
@@ -158,7 +158,7 @@ You are Hyperion, an assistant for the HYPER-AI IDE.
 The user asked you to validate a file from the IDE workspace.
 
 File path:
-{decision.path}
+{resolved_path}
 
 Validation report:
 {report}
@@ -176,7 +176,7 @@ User request:
                     if chunk.text:
                         yield f"data: {json.dumps({'response': chunk.text})}\n\n"
 
-            except ValidateFileError as exc:
+            except (ResolvePathError, ValidateFileError) as exc:
                 response = str(exc)
 
                 yield f"data: {json.dumps({'response': response})}\n\n"
@@ -198,23 +198,32 @@ User request:
             response = f"Created {decision.path}."
             yield f"data: {json.dumps({'response': response})}\n\n"
 
-
     elif decision.intent == "edit_file":
         if decision.path is None:
             response = "Which file would you like me to edit?"
             yield f"data: {json.dumps({'response': response})}\n\n"
 
         else:
-            action = {
-                "action": "edit_file",
-                "path": decision.path,
-                "content": decision.content or "",
-            }
+            try:
+                resolved_path = await resolve_existing_path(
+                    decision.path
+                )
 
-            yield f"data: {json.dumps(action)}\n\n"
+                action = {
+                    "action": "edit_file",
+                    "path": resolved_path,
+                    "content": decision.content or "",
+                }
 
-            response = f"Updated {decision.path}."
-            yield f"data: {json.dumps({'response': response})}\n\n"
+                yield f"data: {json.dumps(action)}\n\n"
+
+                response = f"Updated {resolved_path}."
+                yield f"data: {json.dumps({'response': response})}\n\n"
+
+            except ResolvePathError as exc:
+                response = str(exc)
+
+                yield f"data: {json.dumps({'response': response})}\n\n"
 
     elif decision.intent == "delete_file":
         if decision.path is None:
@@ -222,15 +231,25 @@ User request:
             yield f"data: {json.dumps({'response': response})}\n\n"
 
         else:
-            action = {
-                "action": "delete_file",
-                "path": decision.path,
-            }
+            try:
+                resolved_path = await resolve_existing_path(
+                    decision.path
+                )
 
-            yield f"data: {json.dumps(action)}\n\n"
+                action = {
+                    "action": "delete_file",
+                    "path": resolved_path,
+                }
 
-            response = f"Deleted {decision.path}."
-            yield f"data: {json.dumps({'response': response})}\n\n"
+                yield f"data: {json.dumps(action)}\n\n"
+
+                response = f"Deleted {resolved_path}."
+                yield f"data: {json.dumps({'response': response})}\n\n"
+
+            except ResolvePathError as exc:
+                response = str(exc)
+
+                yield f"data: {json.dumps({'response': response})}\n\n"
 
     elif decision.intent == "create_folder":
         if decision.path is None:
@@ -248,18 +267,9 @@ User request:
             response = f"Created folder {decision.path}."
             yield f"data: {json.dumps({'response': response})}\n\n"
 
-
     elif decision.intent == "delete_folder":
         if decision.path is None:
             response = "Which folder would you like me to delete?"
-            yield f"data: {json.dumps({'response': response})}\n\n"
-
-        else:
-            action = {
-                "action": "delete_folder",
-                "path": decision.path,
-            }
-
             yield f"data: {json.dumps(action)}\n\n"
 
             response = f"Deleted folder {decision.path}."
@@ -292,3 +302,5 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=8000,
     )
+
+

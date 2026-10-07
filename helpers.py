@@ -80,3 +80,93 @@ async def validate_file(path: str) -> dict:
         )
 
     return response.json()
+
+class ResolvePathError(Exception):
+    """The workspace path could not be resolved."""
+
+
+async def list_workspace_files(path: str = "") -> list[str]:
+    """Recursively list files in the IDE workspace."""
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.get(
+                f"{IDE_BACKEND_URL}/files",
+                params={"path": path},
+            )
+    except httpx.HTTPError as exc:
+        raise ResolvePathError(
+            f"cannot reach the IDE backend at {IDE_BACKEND_URL} ({exc})"
+        ) from exc
+
+    if response.status_code != 200:
+        raise ResolvePathError(
+            response.json().get("error", f"HTTP {response.status_code}")
+        )
+
+    files = []
+
+    for item in response.json():
+        if item["type"] == "file":
+            files.append(item["path"])
+        elif item["type"] == "folder":
+            files.extend(await list_workspace_files(item["path"]))
+
+    return files
+
+
+async def resolve_existing_path(path: str) -> str:
+    """Resolve a user-provided path against the actual workspace."""
+    requested = path.strip().lstrip("/")
+
+    if not requested:
+        raise ResolvePathError("No file path was provided.")
+
+    workspace_files = await list_workspace_files()
+
+    # 1. Exact path
+    exact_matches = [
+        file_path
+        for file_path in workspace_files
+        if file_path == requested
+    ]
+
+    if len(exact_matches) == 1:
+        return exact_matches[0]
+
+    # 2. Exact basename
+    basename_matches = [
+        file_path
+        for file_path in workspace_files
+        if file_path.rsplit("/", 1)[-1] == requested
+    ]
+
+    if len(basename_matches) == 1:
+        return basename_matches[0]
+
+    if len(basename_matches) > 1:
+        matches = ", ".join(basename_matches)
+        raise ResolvePathError(
+            f"Several files match '{requested}': {matches}. "
+            "Please specify the full path."
+        )
+
+    # 3. Stem match, e.g. "myfile" -> "myfile.yaml"
+    stem_matches = [
+        file_path
+        for file_path in workspace_files
+        if file_path.rsplit("/", 1)[-1].rsplit(".", 1)[0] == requested
+    ]
+
+    if len(stem_matches) == 1:
+        return stem_matches[0]
+
+    if len(stem_matches) > 1:
+        matches = ", ".join(stem_matches)
+        raise ResolvePathError(
+            f"Several files match '{requested}': {matches}. "
+            "Please specify the full path."
+        )
+
+    raise ResolvePathError(
+        f"I couldn't find a file matching '{requested}' in the workspace."
+    )
