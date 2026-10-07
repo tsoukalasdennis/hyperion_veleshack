@@ -2,7 +2,11 @@ import os
 
 import httpx
 
-IDE_BACKEND_URL = os.environ.get("IDE_BACKEND_URL", "http://localhost:3001/api")
+
+IDE_BACKEND_URL = os.environ.get(
+    "IDE_BACKEND_URL",
+    "http://localhost:3001/api",
+)
 
 
 class ReadFileError(Exception):
@@ -11,6 +15,10 @@ class ReadFileError(Exception):
 
 class ValidateFileError(Exception):
     """The IDE could not validate the file."""
+
+
+class ResolvePathError(Exception):
+    """The workspace path could not be resolved."""
 
 
 async def read_file(path: str) -> str:
@@ -23,7 +31,8 @@ async def read_file(path: str) -> str:
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.get(
-                f"{IDE_BACKEND_URL}/agent/file", params={"path": path}
+                f"{IDE_BACKEND_URL}/agent/file",
+                params={"path": path},
             )
     except httpx.HTTPError as exc:
         raise ReadFileError(
@@ -58,7 +67,8 @@ async def validate_file(path: str) -> dict:
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.get(
-                f"{IDE_BACKEND_URL}/agent/validation/file", params={"path": path}
+                f"{IDE_BACKEND_URL}/agent/validation/file",
+                params={"path": path},
             )
     except httpx.HTTPError as exc:
         raise ValidateFileError(
@@ -80,9 +90,6 @@ async def validate_file(path: str) -> dict:
         )
 
     return response.json()
-
-class ResolvePathError(Exception):
-    """The workspace path could not be resolved."""
 
 
 async def list_workspace_files(path: str = "") -> list[str]:
@@ -112,6 +119,35 @@ async def list_workspace_files(path: str = "") -> list[str]:
             files.extend(await list_workspace_files(item["path"]))
 
     return files
+
+
+async def find_matching_paths(path: str) -> list[str]:
+    """Find workspace files matching a user-provided path or filename."""
+    requested = path.strip().lstrip("/")
+
+    if not requested:
+        return []
+
+    workspace_files = await list_workspace_files()
+
+    # 1. Exact path
+    exact_matches = [
+        file_path
+        for file_path in workspace_files
+        if file_path == requested
+    ]
+
+    if exact_matches:
+        return exact_matches
+
+    # 2. Exact basename
+    basename_matches = [
+        file_path
+        for file_path in workspace_files
+        if file_path.rsplit("/", 1)[-1] == requested
+    ]
+
+    return basename_matches
 
 
 async def resolve_existing_path(path: str) -> str:

@@ -17,6 +17,7 @@ from helpers import (
     validate_file,
     resolve_existing_path,
     ResolvePathError,
+    find_matching_paths,
 )
 
 
@@ -205,70 +206,86 @@ User request:
 
                 yield f"data: {json.dumps({'response': response})}\n\n"
 
-    
     elif decision.intent == "create_file":
         if decision.path is None:
             response = "Which file would you like me to create?"
             yield f"data: {json.dumps({'response': response})}\n\n"
 
         else:
-            content_decision = await router.interpret_content(
-                user_text=request.text,
-                intent=decision.intent,
-                path=decision.path,
+            matches = await find_matching_paths(
+                decision.path
             )
 
-            if content_decision.mode == "clarify":
-                response = content_decision.clarification
+            if len(matches) == 1:
+                response = f"The file `{matches[0]}` already exists."
 
                 yield f"data: {json.dumps({'response': response})}\n\n"
 
-            elif content_decision.mode == "empty":
-                action = {
-                    "action": "create_file",
-                    "path": decision.path,
-                    "content": "",
-                }
-
-                yield f"data: {json.dumps(action)}\n\n"
-
-                response = f"Created {decision.path}."
-
-                yield f"data: {json.dumps({'response': response})}\n\n"
-
-            elif content_decision.mode == "literal":
-                content = content_decision.literal_content or ""
-
-                action = {
-                    "action": "create_file",
-                    "path": decision.path,
-                    "content": content,
-                }
-
-                yield f"data: {json.dumps(action)}\n\n"
-
-                response = f"Created {decision.path}."
-
-                yield f"data: {json.dumps({'response': response})}\n\n"
-
-            elif content_decision.mode == "generate":
-                content = await generate_file_content(
-                    content_decision.generation_instruction or ""
+            elif len(matches) > 1:
+                response = (
+                    f"Several files named `{decision.path}` already exist: "
+                    f"{', '.join(matches)}. "
+                    "Please specify the full path."
                 )
 
-                action = {
-                    "action": "create_file",
-                    "path": decision.path,
-                    "content": content,
-                }
-
-                yield f"data: {json.dumps(action)}\n\n"
-
-                response = f"Created {decision.path}."
-
                 yield f"data: {json.dumps({'response': response})}\n\n"
 
+            else:
+                content_decision = await router.interpret_content(
+                    user_text=request.text,
+                    intent=decision.intent,
+                    path=decision.path,
+                )
 
+                if content_decision.mode == "clarify":
+                    response = content_decision.clarification
+
+                    yield f"data: {json.dumps({'response': response})}\n\n"
+
+                elif content_decision.mode == "empty":
+                    action = {
+                        "action": "create_file",
+                        "path": decision.path,
+                        "content": "",
+                    }
+
+                    yield f"data: {json.dumps(action)}\n\n"
+
+                    response = f"Created {decision.path}."
+
+                    yield f"data: {json.dumps({'response': response})}\n\n"
+
+                elif content_decision.mode == "literal":
+                    content = content_decision.literal_content or ""
+
+                    action = {
+                        "action": "create_file",
+                        "path": decision.path,
+                        "content": content,
+                    }
+
+                    yield f"data: {json.dumps(action)}\n\n"
+
+                    response = f"Created {decision.path}."
+
+                    yield f"data: {json.dumps({'response': response})}\n\n"
+
+                elif content_decision.mode == "generate":
+                    content = await generate_file_content(
+                        content_decision.generation_instruction or ""
+                    )
+
+                    action = {
+                        "action": "create_file",
+                        "path": decision.path,
+                        "content": content,
+                    }
+
+                    yield f"data: {json.dumps(action)}\n\n"
+
+                    response = f"Created {decision.path}."
+
+                    yield f"data: {json.dumps({'response': response})}\n\n"
 
     elif decision.intent == "edit_file":
         if decision.path is None:
@@ -386,5 +403,3 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=8000,
     )
-
-
