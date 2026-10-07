@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from rag_langchain import RAG
 from router import Router
+from memory import ConversationMemory
 from helpers import (
     ReadFileError,
     ValidateFileError,
@@ -38,6 +39,7 @@ llm = ChatOpenAI(
 
 
 router = Router(llm)
+memory = ConversationMemory(max_turns=10)
 
 
 async def generate_file_content(instruction: str) -> str:
@@ -115,7 +117,16 @@ USER QUESTION:
 
 
 async def generate_reply(request: ChatRequest):
-    decision = await router.route(request.text)
+    conversation_history = memory.format_history(
+        request.user_id
+    )
+
+    decision = await router.route(
+        request.text,
+        conversation_history=conversation_history,
+    )
+
+    assistant_response = ""
 
     if decision.intent == "rag":
         results = RAG_INDEX.search(
@@ -130,11 +141,15 @@ async def generate_reply(request: ChatRequest):
 
         async for chunk in llm.astream(prompt):
             if chunk.text:
+                assistant_response += chunk.text
+
                 yield f"data: {json.dumps({'response': chunk.text})}\n\n"
 
     elif decision.intent == "read_file":
         if decision.path is None:
             response = "Which file would you like me to read?"
+            assistant_response = response
+
             yield f"data: {json.dumps({'response': response})}\n\n"
 
         else:
@@ -155,16 +170,21 @@ async def generate_reply(request: ChatRequest):
                         f"```text\n{content}\n```"
                     )
 
+                assistant_response = response
+
                 yield f"data: {json.dumps({'response': response})}\n\n"
 
             except (ResolvePathError, ReadFileError) as exc:
                 response = str(exc)
+                assistant_response = response
 
                 yield f"data: {json.dumps({'response': response})}\n\n"
 
     elif decision.intent == "validate_file":
         if decision.path is None:
             response = "Which file would you like me to validate?"
+            assistant_response = response
+
             yield f"data: {json.dumps({'response': response})}\n\n"
 
         else:
@@ -199,16 +219,21 @@ User request:
 
                 async for chunk in llm.astream(prompt):
                     if chunk.text:
+                        assistant_response += chunk.text
+
                         yield f"data: {json.dumps({'response': chunk.text})}\n\n"
 
             except (ResolvePathError, ValidateFileError) as exc:
                 response = str(exc)
+                assistant_response = response
 
                 yield f"data: {json.dumps({'response': response})}\n\n"
 
     elif decision.intent == "create_file":
         if decision.path is None:
             response = "Which file would you like me to create?"
+            assistant_response = response
+
             yield f"data: {json.dumps({'response': response})}\n\n"
 
         else:
@@ -218,6 +243,7 @@ User request:
 
             if len(matches) == 1:
                 response = f"The file `{matches[0]}` already exists."
+                assistant_response = response
 
                 yield f"data: {json.dumps({'response': response})}\n\n"
 
@@ -227,6 +253,7 @@ User request:
                     f"{', '.join(matches)}. "
                     "Please specify the full path."
                 )
+                assistant_response = response
 
                 yield f"data: {json.dumps({'response': response})}\n\n"
 
@@ -238,7 +265,11 @@ User request:
                 )
 
                 if content_decision.mode == "clarify":
-                    response = content_decision.clarification
+                    response = (
+                        content_decision.clarification
+                        or "Could you clarify what content the file should contain?"
+                    )
+                    assistant_response = response
 
                     yield f"data: {json.dumps({'response': response})}\n\n"
 
@@ -252,6 +283,7 @@ User request:
                     yield f"data: {json.dumps(action)}\n\n"
 
                     response = f"Created {decision.path}."
+                    assistant_response = response
 
                     yield f"data: {json.dumps({'response': response})}\n\n"
 
@@ -267,6 +299,7 @@ User request:
                     yield f"data: {json.dumps(action)}\n\n"
 
                     response = f"Created {decision.path}."
+                    assistant_response = response
 
                     yield f"data: {json.dumps({'response': response})}\n\n"
 
@@ -284,12 +317,15 @@ User request:
                     yield f"data: {json.dumps(action)}\n\n"
 
                     response = f"Created {decision.path}."
+                    assistant_response = response
 
                     yield f"data: {json.dumps({'response': response})}\n\n"
 
     elif decision.intent == "edit_file":
         if decision.path is None:
             response = "Which file would you like me to edit?"
+            assistant_response = response
+
             yield f"data: {json.dumps({'response': response})}\n\n"
 
         else:
@@ -307,17 +343,21 @@ User request:
                 yield f"data: {json.dumps(action)}\n\n"
 
                 response = f"Updated {resolved_path}."
+                assistant_response = response
 
                 yield f"data: {json.dumps({'response': response})}\n\n"
 
             except ResolvePathError as exc:
                 response = str(exc)
+                assistant_response = response
 
                 yield f"data: {json.dumps({'response': response})}\n\n"
 
     elif decision.intent == "delete_file":
         if decision.path is None:
             response = "Which file would you like me to delete?"
+            assistant_response = response
+
             yield f"data: {json.dumps({'response': response})}\n\n"
 
         else:
@@ -334,17 +374,21 @@ User request:
                 yield f"data: {json.dumps(action)}\n\n"
 
                 response = f"Deleted {resolved_path}."
+                assistant_response = response
 
                 yield f"data: {json.dumps({'response': response})}\n\n"
 
             except ResolvePathError as exc:
                 response = str(exc)
+                assistant_response = response
 
                 yield f"data: {json.dumps({'response': response})}\n\n"
 
     elif decision.intent == "create_folder":
         if decision.path is None:
             response = "Which folder would you like me to create?"
+            assistant_response = response
+
             yield f"data: {json.dumps({'response': response})}\n\n"
 
         else:
@@ -356,12 +400,15 @@ User request:
             yield f"data: {json.dumps(action)}\n\n"
 
             response = f"Created folder {decision.path}."
+            assistant_response = response
 
             yield f"data: {json.dumps({'response': response})}\n\n"
 
     elif decision.intent == "delete_folder":
         if decision.path is None:
             response = "Which folder would you like me to delete?"
+            assistant_response = response
+
             yield f"data: {json.dumps({'response': response})}\n\n"
 
         else:
@@ -373,6 +420,7 @@ User request:
             yield f"data: {json.dumps(action)}\n\n"
 
             response = f"Deleted folder {decision.path}."
+            assistant_response = response
 
             yield f"data: {json.dumps({'response': response})}\n\n"
 
@@ -382,7 +430,19 @@ User request:
             "and IDE tasks."
         )
 
+        assistant_response = response
+
         yield f"data: {json.dumps({'response': response})}\n\n"
+
+    memory.add_user_message(
+        request.user_id,
+        request.text,
+    )
+
+    memory.add_assistant_message(
+        request.user_id,
+        assistant_response,
+    )
 
     yield "data: [DONE]\n\n"
 
