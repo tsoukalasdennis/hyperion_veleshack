@@ -65,10 +65,12 @@ docker run --env-file .env -p 8000:8000 \
 
 ## Project
 
-**GitHub:** https://github.com/tsoukalasdennis/hyperion_veleshack
+**Challenge:** VelesHack 2026
 
-**Challenge:** VelesHack 2026 — HYPER-AI / Hyperion
+**Category:** Challenge 1 (HYPER-AI): Hyperion - An LLM-Powered Agentic Assistant
+
+**Project name:** HyperAgents
 
 ## License
 
-Apache 2.0
+[Apache 2.0](LICENCE)
