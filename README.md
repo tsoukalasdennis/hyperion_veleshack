@@ -63,6 +63,37 @@ docker run --env-file .env -p 8000:8000 \
   tsoukalasdennis/hyperion:latest
 ```
 
+
+## What I learned
+
+VelesHack 2026 was my **first hackathon**. Building Hyperion was a great learning
+experience, and seeing other projects gave me a clearer idea of what I would do
+differently if I started again.
+
+The main areas I would improve are:
+
+* **RAG and source attribution** — make retrieval more reliable and show the
+  documentation sources behind each answer, so users can check where information
+  came from.
+* **IDE actions** — redesign how actions are represented and executed instead of
+  relying on loosely connected instructions. I would use explicit, structured
+  actions and validate generated or edited files with the IDE before reporting
+  success.
+* **Action orchestration** — introduce workers that can run independent tasks in
+  parallel and dependent tasks in sequence, with clear results and error handling
+  at each step.
+* **Safety for destructive actions** — ask the user to confirm before deleting
+  files or folders.
+* **Less prompt-only behavior** — move important rules and checks into
+  deterministic code where possible, keeping prompts focused on the parts that
+  genuinely need language-model judgment.
+
+The guardrails and session memory felt like solid foundations, so I would keep
+them and focus on testing them alongside the larger changes. These are lessons
+and ideas for a future version, not claims that those improvements are already
+implemented.
+
+
 ## Project
 
 **Challenge:** VelesHack 2026
